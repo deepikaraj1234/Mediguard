@@ -194,7 +194,11 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined') {
+        throw new Error("API_KEY_MISSING");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
       const isImageRequest = /generate|show|create|draw|image|diagram/i.test(userMsg);
       const isVideoRequest = /video|animate|movie/i.test(userMsg);
@@ -272,18 +276,15 @@ export default function Chat() {
 
         const response = await ai.models.generateContent({
           model: modelName,
-          contents: [
-            { role: "user", parts: [{ text: `SYSTEM INSTRUCTION: You are MediGuard AI, a highly advanced medical assistant specialized for the Indian healthcare context. 
+          contents: [{ role: "user", parts: [{ text: userMsg }] }],
+          config: {
+            systemInstruction: `You are MediGuard AI, a highly advanced medical assistant specialized for the Indian healthcare context. 
             Your goals:
             1. Provide safe symptom guidance.
             2. Detect emergencies (red flags) and immediately advise calling Indian emergency services (Dial 108 for Ambulance, 112 for General Emergency).
             3. Always include a medical disclaimer.
             4. Use Google Search for up-to-date medical info if needed.
-            5. Use Google Maps if the user asks for nearby clinics, hospitals (like AIIMS, Apollo, Fortis), or pharmacies in India.
-            
-            User Message: ${userMsg}` }] }
-          ],
-          config: {
+            5. Use Google Maps if the user asks for nearby clinics, hospitals (like AIIMS, Apollo, Fortis), or pharmacies in India.`,
             tools: tools,
             thinkingConfig: isDeepThinking ? { thinkingLevel: ThinkingLevel.HIGH } : undefined
           },
@@ -303,10 +304,13 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error("Chat Error:", error);
-      if (error.message?.includes("Requested entity was not found")) {
+      if (error.message === "API_KEY_MISSING") {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables." }]);
+      } else if (error.message?.includes("Requested entity was not found")) {
         await window.aistudio.openSelectKey();
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again." }]);
       }
-      setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again." }]);
     } finally {
       setIsLoading(false);
     }

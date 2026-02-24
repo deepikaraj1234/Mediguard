@@ -63,7 +63,11 @@ export default function DietPlanner() {
   const generateDietPlan = async () => {
     setIsLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined') {
+        throw new Error("API_KEY_MISSING");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `Generate a highly personalized weekly diet plan (7 days) for a user with the following profile:
       - Age: ${formData.age}
@@ -104,9 +108,13 @@ export default function DietPlanner() {
 
       setGeneratedPlan(response.text || "Failed to generate plan.");
       setStep(3);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Diet Plan Error:", error);
-      alert("Failed to generate diet plan. Please try again.");
+      if (error.message === "API_KEY_MISSING") {
+        alert("Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables.");
+      } else {
+        alert("Failed to generate diet plan. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }

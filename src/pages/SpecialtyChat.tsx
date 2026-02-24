@@ -10,7 +10,8 @@ import {
   Shield, 
   Trash2,
   AlertTriangle,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
@@ -28,6 +29,7 @@ export default function SpecialtyChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load history from local storage
@@ -40,7 +42,7 @@ export default function SpecialtyChat() {
       setMessages([
         { 
           role: 'assistant', 
-          content: `Hello! I am your ${decodedSpecialty} specialist. How can I assist you with your health concerns today? \n\n*Disclaimer: This is not a medical diagnosis. Please consult a doctor.*` 
+          content: `Hello! I am your ${decodedSpecialty} specialist and AI Symptom Checker. How can I assist you with your health concerns today? \n\nPlease describe any symptoms you're experiencing, and I'll help triage them by asking a few follow-up questions. \n\n*Disclaimer: This is not a medical diagnosis. Please consult a doctor.*` 
         }
       ]);
     }
@@ -69,17 +71,23 @@ export default function SpecialtyChat() {
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined') {
+        throw new Error("API_KEY_MISSING");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
-      const systemPrompt = `You are a highly experienced specialist doctor in the field of ${decodedSpecialty}. 
+      const systemPrompt = `You are a highly experienced specialist doctor in the field of ${decodedSpecialty}, acting as an AI Symptom Checker and Triage Assistant.
       Your goals:
-      1. Provide educational medical information related to ${decodedSpecialty}.
-      2. Ask relevant follow-up questions about symptoms.
-      3. Suggest possible causes for the symptoms described.
-      4. Suggest preventive tips and lifestyle advice.
-      5. Maintain a professional, empathetic, and clinical tone.
-      6. ALWAYS include this disclaimer at the end of your response: "This is not a medical diagnosis. Please consult a doctor."
-      7. If the user describes a life-threatening emergency, advise them to call emergency services immediately.`;
+      1. When a user describes symptoms, perform a systematic triage.
+      2. Ask ONE relevant follow-up question at a time to narrow down the potential causes (e.g., duration, severity, onset, triggers).
+      3. Use the "SOCRATES" method for pain assessment where applicable (Site, Onset, Character, Radiation, Associations, Time course, Exacerbating/Relieving factors, Severity).
+      4. Provide educational medical information related to ${decodedSpecialty} based on the symptoms.
+      5. Detect "Red Flags" (emergency symptoms) and immediately advise calling Indian emergency services (Dial 108 for Ambulance, 112 for General Emergency).
+      6. Suggest possible causes only after gathering sufficient information, always framing them as possibilities, not diagnoses.
+      7. Suggest preventive tips and lifestyle advice.
+      8. Maintain a professional, empathetic, and clinical tone.
+      9. ALWAYS include this disclaimer at the end of your response: "This is not a medical diagnosis. I am an AI assistant. Please consult a qualified doctor for a formal evaluation."`;
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -94,24 +102,31 @@ export default function SpecialtyChat() {
 
       const aiResponse = response.text || "I'm sorry, I couldn't process that request.";
       setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Specialty Chat Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again later." }]);
+      if (error.message === "API_KEY_MISSING") {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables." }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again later." }]);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const clearHistory = () => {
-    if (window.confirm("Are you sure you want to clear this chat history?")) {
-      localStorage.removeItem(`chat_history_${decodedSpecialty}`);
-      setMessages([
-        { 
-          role: 'assistant', 
-          content: `Hello! I am your ${decodedSpecialty} specialist. How can I assist you with your health concerns today? \n\n*Disclaimer: This is not a medical diagnosis. Please consult a doctor.*` 
-        }
-      ]);
-    }
+    setShowClearConfirm(true);
+  };
+
+  const confirmClear = () => {
+    localStorage.removeItem(`chat_history_${decodedSpecialty}`);
+    setMessages([
+      { 
+        role: 'assistant', 
+        content: `Hello! I am your ${decodedSpecialty} specialist and AI Symptom Checker. How can I assist you with your health concerns today? \n\nPlease describe any symptoms you're experiencing, and I'll help triage them by asking a few follow-up questions. \n\n*Disclaimer: This is not a medical diagnosis. Please consult a doctor.*` 
+      }
+    ]);
+    setShowClearConfirm(false);
   };
 
   return (
@@ -129,7 +144,7 @@ export default function SpecialtyChat() {
             <h2 className="font-bold text-slate-900">Consulting: {decodedSpecialty}</h2>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-xs text-slate-500 font-medium">Specialist AI Online</span>
+              <span className="text-xs text-slate-500 font-medium">AI Symptom Checker & Specialist</span>
             </div>
           </div>
         </div>
@@ -225,6 +240,50 @@ export default function SpecialtyChat() {
           </div>
         </div>
       </div>
+
+      {/* Clear Conversation Confirmation Modal */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <button 
+                  onClick={() => setShowClearConfirm(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Clear Conversation?</h3>
+              <p className="text-slate-500 mb-8">This will permanently remove all messages from this specialty chat session. This action cannot be undone.</p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmClear}
+                  className="flex-1 px-6 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 transition-all"
+                >
+                  Yes, Clear All
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
