@@ -1,0 +1,9 @@
+{
+  "name": "MediGuard AI - Advanced Healthcare Platform",
+  "description": "An enterprise-grade, AI-powered healthcare assistant for symptom checking, teleconsultation, and medical management.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}
