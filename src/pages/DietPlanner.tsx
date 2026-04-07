@@ -30,6 +30,22 @@ export default function DietPlanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<string | null>(null);
 
+  // Load history
+  React.useEffect(() => {
+    const savedPlan = localStorage.getItem('mediguard_last_diet_plan');
+    if (savedPlan) {
+      setGeneratedPlan(savedPlan);
+      setStep(3); // Go straight to the results step
+    }
+  }, []);
+
+  // Save history
+  React.useEffect(() => {
+    if (generatedPlan) {
+      localStorage.setItem('mediguard_last_diet_plan', generatedPlan);
+    }
+  }, [generatedPlan]);
+
   const [formData, setFormData] = useState({
     age: '',
     gender: 'Male',
@@ -64,7 +80,7 @@ export default function DietPlanner() {
     setIsLoading(true);
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined') {
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY') {
         throw new Error("API_KEY_MISSING");
       }
       const ai = new GoogleGenAI({ apiKey });
@@ -110,10 +126,14 @@ export default function DietPlanner() {
       setStep(3);
     } catch (error: any) {
       console.error("Diet Plan Error:", error);
-      if (error.message === "API_KEY_MISSING") {
-        alert("Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables.");
+      const errorMessage = error.message || String(error);
+      
+      if (errorMessage === "API_KEY_MISSING") {
+        alert("⚠️ Gemini API Key is missing.\n\nPlease ensure GEMINI_API_KEY is set in your local .env file.");
+      } else if (errorMessage.includes("API key not valid")) {
+        alert("⚠️ Invalid API Key.\n\nPlease check your API key configuration.");
       } else {
-        alert("Failed to generate diet plan. Please try again.");
+        alert(`❌ Error: ${errorMessage}`);
       }
     } finally {
       setIsLoading(false);
@@ -426,7 +446,17 @@ export default function DietPlanner() {
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{generatedPlan}</ReactMarkdown>
                 </div>
 
-                <div className="flex justify-center gap-4 pt-4">
+                <div className="flex flex-wrap justify-center gap-4 pt-4">
+                  <button 
+                    onClick={() => {
+                      setGeneratedPlan(null);
+                      localStorage.removeItem('mediguard_last_diet_plan');
+                      setStep(1);
+                    }}
+                    className="px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all"
+                  >
+                    Start Over
+                  </button>
                   <button 
                     onClick={() => setStep(2)}
                     className="px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all"

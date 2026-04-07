@@ -64,6 +64,25 @@ export default function Chat() {
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load history from local storage
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('mediguard_chat_history');
+    if (savedHistory) {
+      try {
+        setMessages(JSON.parse(savedHistory) as Message[]);
+      } catch (e) {
+        console.error("Failed to parse chat history", e);
+      }
+    }
+  }, []);
+
+  // Save history to local storage
+  useEffect(() => {
+    if (messages.length > 1) {
+      localStorage.setItem('mediguard_chat_history', JSON.stringify(messages));
+    }
+  }, [messages]);
+
   // Live API Refs
   const liveSessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -76,9 +95,11 @@ export default function Chat() {
   }, [messages]);
 
   const clearConversation = () => {
-    setMessages([
+    const initialMessage: Message[] = [
       { role: 'assistant', content: "Hello! I'm MediGuard AI, your virtual health assistant. How can I help you today? \n\n*Disclaimer: I am an AI, not a doctor. In case of emergency, please call your local emergency services immediately.*" }
-    ]);
+    ];
+    setMessages(initialMessage);
+    localStorage.removeItem('mediguard_chat_history');
     setShowClearConfirm(false);
     stopSpeaking();
   };
@@ -195,7 +216,7 @@ export default function Chat() {
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined') {
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY') {
         throw new Error("API_KEY_MISSING");
       }
       const ai = new GoogleGenAI({ apiKey });
@@ -304,12 +325,16 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error("Chat Error:", error);
-      if (error.message === "API_KEY_MISSING") {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables." }]);
-      } else if (error.message?.includes("Requested entity was not found")) {
+      const errorMessage = error.message || String(error);
+      
+      if (errorMessage === "API_KEY_MISSING") {
+        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ **Gemini API Key is missing.**\n\nPlease create a `.env` file in your project root and add:\n`GEMINI_API_KEY=your_key_here`" }]);
+      } else if (errorMessage.includes("Requested entity was not found")) {
         await window.aistudio.openSelectKey();
+      } else if (errorMessage.includes("API key not valid")) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ **Invalid API Key.**\n\nThe API key provided is not valid. Please check your `.env` file or select a new key." }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again." }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `❌ **AI Error:** ${errorMessage}\n\nPlease check your connection or API configuration.` }]);
       }
     } finally {
       setIsLoading(false);

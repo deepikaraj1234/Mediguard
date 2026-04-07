@@ -36,7 +36,11 @@ export default function SpecialtyChat() {
   useEffect(() => {
     const savedHistory = localStorage.getItem(`chat_history_${decodedSpecialty}`);
     if (savedHistory) {
-      setMessages(JSON.parse(savedHistory));
+      try {
+        setMessages(JSON.parse(savedHistory) as Message[]);
+      } catch (e) {
+        console.error("Failed to parse specialty chat history", e);
+      }
     } else {
       // Initial greeting
       setMessages([
@@ -72,7 +76,7 @@ export default function SpecialtyChat() {
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined') {
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY') {
         throw new Error("API_KEY_MISSING");
       }
       const ai = new GoogleGenAI({ apiKey });
@@ -104,10 +108,14 @@ export default function SpecialtyChat() {
       setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
     } catch (error: any) {
       console.error("Specialty Chat Error:", error);
-      if (error.message === "API_KEY_MISSING") {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Gemini API Key is missing. Please ensure GEMINI_API_KEY is set in your environment variables." }]);
+      const errorMessage = error.message || String(error);
+      
+      if (errorMessage === "API_KEY_MISSING") {
+        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ **Gemini API Key is missing.**\n\nPlease ensure `GEMINI_API_KEY` is set in your local `.env` file." }]);
+      } else if (errorMessage.includes("API key not valid")) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ **Invalid API Key.**\n\nPlease check your API key configuration in the `.env` file." }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error. Please try again later." }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `❌ **Error:** ${errorMessage}` }]);
       }
     } finally {
       setIsLoading(false);
